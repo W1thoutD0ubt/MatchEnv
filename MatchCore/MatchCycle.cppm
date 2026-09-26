@@ -104,7 +104,7 @@ void RoundUpdate(PVZ::Board board)
 /// @brief 队伍丢失小推车
 void TeamEliminated(PVZ::LawnMower mower)
 {
-	mower.State = LawnMowerState::Triggered;
+	mower.State = PVZEnum::LawnMowerState::Triggered;
 	LuaCallOnTeamEliminated(mower.Row);
 }
 
