@@ -78,8 +78,8 @@ function OnTerminate(plant_won)
 	-- 递增已完成对局数
 	Match.Round = Match.Round + 1
 	if Match.Round == total then
-		result_file:write(string.format("{\"formation\":\"P34|P34|P34|P34|P34|_|_|_|Z32\",\"zombie_wins\":%d,\"trials\":%d}")
-			, zombie_win_round, total)
+		result_file:write(string.format("{\"formation\":\"P34|P34|P34|P34|P34|_|_|_|Z32\",\"zombie_wins\":%d,\"trials\":%d}"
+			, zombie_win_round, total))
 		result_file:flush()
 
 		exit()
