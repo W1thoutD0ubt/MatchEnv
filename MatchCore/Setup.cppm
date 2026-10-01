@@ -85,6 +85,9 @@ void SetupEvents()
 		auto music = PVZ::GetMusic();
 		music.StopAllMusic();
 		music.Disabled = true;
+
+		DisableMousePositionUpdate();
+		PVZ::IsLocaleChanged = false;
 	}
 	else
 		BoardKeyDownEvent((int)onBoardKeyDown);
