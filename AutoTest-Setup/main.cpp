@@ -72,9 +72,9 @@ int main(int argc, char* argv[])
 
 		*(code + 12) = idx;
 		auto pos = (int*)(code + 14);
-		*pos = PVZ::Memory::Variable;
+		*pos = PVZ::Memory::AllocMemoryUnsafe();
 
-		PVZ::Memory::WriteArrayUnsafe(PVZ::Memory::Variable, dll_pos, sizeof(dll_pos));
+		PVZ::Memory::WriteArrayUnsafe(*pos, dll_pos, sizeof(dll_pos));
 
 		Injector inj(0x5513B5, 6, code, sizeof(code));
 
