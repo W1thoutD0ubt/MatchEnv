@@ -137,7 +137,7 @@ function OnMatchUpdate()
             
             -- 生成僵尸在列10，X坐标随机偏移
             local x = 780.0 + math.random() * 40
-            CreateZombie(zombie_type, row, 10, x)
+            CreateZombie(zombie_type, row, 10, { X = x })
         end
     end
 end

@@ -3,6 +3,9 @@ module;
 #define SOL_LUAJIT 1
 #include <sol/sol.hpp>
 #include <windows.h>
+#include <cmath>
+#include <limits>
+#include <type_traits>
 
 export module LuaEnv;
 
@@ -12,6 +15,141 @@ import Global;
 
 static sol::state lua;
 static bool lua_initialized = false;
+
+struct ZombieSpawnOptions
+{
+	sol::optional<float> X;
+	sol::optional<int> BodyHealth;
+	sol::optional<int> BodyMaxHealth;
+	sol::optional<int> HelmHealth;
+	sol::optional<int> HelmMaxHealth;
+	sol::optional<int> ShieldHealth;
+	sol::optional<int> ShieldMaxHealth;
+	sol::optional<int> FlyingHealth;
+	sol::optional<int> FlyingMaxHealth;
+	sol::optional<bool> Hypnotized;
+	sol::optional<int> AttributeCountdown;
+};
+
+template<typename T>
+static T ReadZombieSpawnNumber(const sol::object& value, const char* field)
+{
+	if (value.get_type() != sol::type::number)
+		throw sol::error(std::string("CreateZombie: ") + field + " must be a number");
+
+	double number = value.as<double>();
+	if (!std::isfinite(number)
+		|| number < (std::numeric_limits<T>::lowest)()
+		|| number > (std::numeric_limits<T>::max)())
+		throw sol::error(std::string("CreateZombie: ") + field + " is out of range");
+
+	if constexpr (std::is_integral_v<T>)
+	{
+		if (std::trunc(number) != number)
+			throw sol::error(std::string("CreateZombie: ") + field + " must be an integer");
+	}
+	return static_cast<T>(number);
+}
+
+template<typename T>
+static sol::optional<T> ReadZombieSpawnField(const sol::table& table, const char* field)
+{
+	sol::object value = table.raw_get<sol::object>(field);
+	if (value.get_type() == sol::type::lua_nil)
+		return sol::nullopt;
+
+	if constexpr (std::is_same_v<T, bool>)
+	{
+		if (value.get_type() != sol::type::boolean)
+			throw sol::error(std::string("CreateZombie: ") + field + " must be a boolean");
+		return value.as<bool>();
+	}
+	else
+		return ReadZombieSpawnNumber<T>(value, field);
+}
+
+static ZombieSpawnOptions ReadZombieSpawnOptions(sol::variadic_args args)
+{
+	ZombieSpawnOptions options;
+	if (args.begin() == args.end())
+		return options;
+
+	sol::object value = *args.begin();
+	if (value.get_type() == sol::type::lua_nil)
+		return options;
+	if (value.get_type() == sol::type::number)
+	{
+		options.X = ReadZombieSpawnNumber<float>(value, "X");
+		return options;
+	}
+	if (value.get_type() != sol::type::table)
+		throw sol::error("CreateZombie: fourth argument must be a number, table or nil");
+
+	auto table = value.as<sol::table>();
+	struct IntegerField
+	{
+		const char* name;
+		sol::optional<int> ZombieSpawnOptions::* member;
+	};
+	static constexpr IntegerField integer_fields[] = {
+		{ "BodyHealth", &ZombieSpawnOptions::BodyHealth },
+		{ "BodyMaxHealth", &ZombieSpawnOptions::BodyMaxHealth },
+		{ "HelmHealth", &ZombieSpawnOptions::HelmHealth },
+		{ "HelmMaxHealth", &ZombieSpawnOptions::HelmMaxHealth },
+		{ "ShieldHealth", &ZombieSpawnOptions::ShieldHealth },
+		{ "ShieldMaxHealth", &ZombieSpawnOptions::ShieldMaxHealth },
+		{ "FlyingHealth", &ZombieSpawnOptions::FlyingHealth },
+		{ "FlyingMaxHealth", &ZombieSpawnOptions::FlyingMaxHealth },
+		{ "AttributeCountdown", &ZombieSpawnOptions::AttributeCountdown }
+	};
+	for (const auto& entry : table)
+	{
+		bool known = false;
+		if (entry.first.get_type() == sol::type::string)
+		{
+			auto key = entry.first.as<std::string>();
+			known = key == "X" || key == "Hypnotized";
+			for (const auto& field : integer_fields)
+				if (key == field.name)
+				{
+					known = true;
+					break;
+				}
+			if (!known)
+				throw sol::error("CreateZombie: unknown option " + key);
+		}
+		else
+			throw sol::error("CreateZombie: option keys must be strings");
+	}
+
+	options.X = ReadZombieSpawnField<float>(table, "X");
+	options.Hypnotized = ReadZombieSpawnField<bool>(table, "Hypnotized");
+	for (const auto& field : integer_fields)
+		options.*(field.member) = ReadZombieSpawnField<int>(table, field.name);
+	return options;
+}
+
+static void ApplyZombieSpawnOptions(PVZ::Zombie& zombie, const ZombieSpawnOptions& options)
+{
+	if (options.Hypnotized.has_value())
+	{
+		if (*options.Hypnotized)
+			zombie.Hypnotize();
+		else
+			zombie.Hypnotized = false;
+	}
+	if (options.X.has_value()) zombie.X = *options.X;
+	if (options.BodyHealth.has_value()) zombie.BodyHealth = *options.BodyHealth;
+	if (options.BodyMaxHealth.has_value()) zombie.BodyMaxHealth = *options.BodyMaxHealth;
+	if (options.HelmHealth.has_value()) zombie.HelmHealth = *options.HelmHealth;
+	if (options.HelmMaxHealth.has_value()) zombie.HelmMaxHealth = *options.HelmMaxHealth;
+	if (options.ShieldHealth.has_value()) zombie.ShieldHealth = *options.ShieldHealth;
+	if (options.ShieldMaxHealth.has_value()) zombie.ShieldMaxHealth = *options.ShieldMaxHealth;
+	if (options.FlyingHealth.has_value()) zombie.FlyingHealth = *options.FlyingHealth;
+	if (options.FlyingMaxHealth.has_value()) zombie.FlyingMaxHealth = *options.FlyingMaxHealth;
+	// Apply last so Hypnotize cannot overwrite the requested initial countdown.
+	if (options.AttributeCountdown.has_value()) zombie.AttributeCountdown = *options.AttributeCountdown;
+}
 
 export void LuaEnvInit();
 export void LuaCallOnMatchInit()
@@ -60,13 +198,9 @@ void LuaEnvInit()
 	});
 
 	lua.set_function("CreateZombie", [](int type, int row, int column, sol::variadic_args args) {
+		auto options = ReadZombieSpawnOptions(args);
 		auto zombie = Creator::CreateZombie(static_cast<ZombieType::ZombieType>(type), row, column);
-		if (args.begin() != args.end())
-		{
-			auto x = *args.begin();
-			if (x.get_type() != sol::type::lua_nil)
-				zombie.X = x.as<float>();
-		}
+		ApplyZombieSpawnOptions(zombie, options);
 		return zombie;
 	});
 
