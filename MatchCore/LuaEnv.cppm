@@ -279,6 +279,14 @@ void LuaEnvInit()
 		return Creator::CreateIZBrain(row, column.value_or(0));
 	});
 
+	lua.set_function("CreateRake", [](int row, int column) {
+		return Creator::CreateRake(row, column);
+	});
+
+	lua.set_function("CreateLadder", [](int row, int column) {
+		return Creator::CreateLadder(row, column);
+	});
+
 	lua.set_function("HasZombie", []() {
 		return PVZ::GetBoard().ZombiesCount > 0;
 	});
