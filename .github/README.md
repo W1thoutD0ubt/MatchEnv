@@ -146,9 +146,19 @@ end
 | `CreatePlant(type, row, column, options)` | 植物类型、行、列、可选配置 table | 在指定位置创建植物，可设置初始生命值和睡眠状态，详见 [植物配置](../example/CreatePlant.md) |
 | `CreateZombie(type, row, column, x)` | 僵尸类型、行、列、X坐标 | 在指定位置创建僵尸 |
 | `CreateIZBrain(row, column)` | 行、列（默认0） | 在指定位置创建 IZ 模式的脑子 |
+| `CreateRake(row, column)` | 行、列 | 在指定位置创建钉耙 |
+| `CreateLadder(row, column)` | 行、列 | 在指定位置创建已搭好的梯子 |
+| `CreateVase(row, column, options)` | 行、列、配置 table（必填） | 创建罐子，返回 `PVZ::Vase`，详见 [罐子配置](../example/CreateVase.md) |
 | `ClearPlants()` | 无 | 清除场上所有植物 |
 | `Terminate(plant_won)` | `plant_won`: 植物方是否获胜 | 终止当前对局，触发 `OnTerminate(plant_won)` |
 | `HasZombie()` | 无 | `bool` | 判断场上是否有僵尸 |
+
+行、列均从 0 开始编号。例如，在初始化回调中调用：
+
+```lua
+CreateRake(0, 4)   -- 第 1 行、第 5 列生成钉耙
+CreateLadder(1, 3) -- 第 2 行、第 4 列生成已搭好的梯子
+```
 
 ### Match 属性
 

@@ -214,6 +214,78 @@ static void ApplyPlantSpawnOptions(PVZ::Plant& plant, const PlantSpawnOptions& o
 	if (options.MaxHp.has_value()) plant.MaxHp = *options.MaxHp;
 }
 
+static int ReadVaseInteger(const sol::object& value, const char* field)
+{
+	if (value.get_type() != sol::type::number)
+		throw sol::error(std::string("CreateVase: ") + field + " must be a number");
+	double number = value.as<double>();
+	if (!std::isfinite(number)
+		|| number < (std::numeric_limits<int>::lowest)()
+		|| number > (std::numeric_limits<int>::max)())
+		throw sol::error(std::string("CreateVase: ") + field + " is out of range");
+	if (std::trunc(number) != number)
+		throw sol::error(std::string("CreateVase: ") + field + " must be an integer");
+	return static_cast<int>(number);
+}
+
+static Creator::VaseCreateInfo ReadVaseOptions(int row, int column, sol::variadic_args args)
+{
+	if (args.size() != 1 || (*args.begin()).get_type() != sol::type::table)
+		throw sol::error("CreateVase: third argument must be an options table");
+
+	auto table = (*args.begin()).as<sol::table>();
+	Creator::VaseCreateInfo info{ row, column, VaseContent::None,
+		VaseSkin::VaseSkinUnknow, ZombieType::Zombie, SeedType::Peashooter, 0 };
+	for (const auto& entry : table)
+	{
+		if (entry.first.get_type() != sol::type::string)
+			throw sol::error("CreateVase: option keys must be strings");
+		auto key = entry.first.as<std::string>();
+		if (key != "Plant" && key != "Zombie" && key != "Sun" && key != "Skin")
+			throw sol::error("CreateVase: unknown option " + key);
+	}
+
+	struct ContentField
+	{
+		const char* name;
+		VaseContent::VaseContent content;
+	};
+	static constexpr ContentField content_fields[] = {
+		{ "Plant", VaseContent::Plant },
+		{ "Zombie", VaseContent::Zombie },
+		{ "Sun", VaseContent::Sun }
+	};
+	for (const auto& field : content_fields)
+	{
+		sol::object value = table.raw_get<sol::object>(field.name);
+		if (value.get_type() == sol::type::lua_nil)
+			continue;
+		if (info.content != VaseContent::None)
+			throw sol::error("CreateVase: specify at most one of Plant, Zombie and Sun");
+		int number = ReadVaseInteger(value, field.name);
+		info.content = field.content;
+		switch (field.content)
+		{
+		case VaseContent::Plant: info.plant = static_cast<SeedType::SeedType>(number); break;
+		case VaseContent::Zombie: info.zombie = static_cast<ZombieType::ZombieType>(number); break;
+		case VaseContent::Sun: info.sun = number; break;
+		}
+	}
+
+	sol::object skin = table.raw_get<sol::object>("Skin");
+	if (skin.get_type() != sol::type::lua_nil)
+	{
+		if (skin.get_type() != sol::type::string)
+			throw sol::error("CreateVase: Skin must be a string");
+		auto name = skin.as<std::string>();
+		if (name == "normal") info.skin = VaseSkin::VaseSkinUnknow;
+		else if (name == "leaf") info.skin = VaseSkin::VaseSkinLeaf;
+		else if (name == "zombie") info.skin = VaseSkin::VaseSkinZombie;
+		else throw sol::error("CreateVase: Skin must be normal, leaf or zombie");
+	}
+	return info;
+}
+
 export void LuaEnvInit();
 export void LuaCallOnMatchInit()
 {
@@ -285,6 +357,10 @@ void LuaEnvInit()
 
 	lua.set_function("CreateLadder", [](int row, int column) {
 		return Creator::CreateLadder(row, column);
+	});
+
+	lua.set_function("CreateVase", [](int row, int column, sol::variadic_args args) {
+		return Creator::CreateVase(ReadVaseOptions(row, column, args));
 	});
 
 	lua.set_function("HasZombie", []() {
