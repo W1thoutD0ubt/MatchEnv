@@ -151,6 +151,69 @@ static void ApplyZombieSpawnOptions(PVZ::Zombie& zombie, const ZombieSpawnOption
 	if (options.AttributeCountdown.has_value()) zombie.AttributeCountdown = *options.AttributeCountdown;
 }
 
+struct PlantSpawnOptions
+{
+	sol::optional<int> Hp;
+	sol::optional<int> MaxHp;
+	sol::optional<bool> Sleeping;
+};
+
+static PlantSpawnOptions ReadPlantSpawnOptions(sol::variadic_args args)
+{
+	PlantSpawnOptions options;
+	if (args.size() == 0)
+		return options;
+	if (args.size() != 1)
+		throw sol::error("CreatePlant: expected at most one options argument");
+	sol::object value = *args.begin();
+	if (value.get_type() == sol::type::lua_nil)
+		return options;
+	if (value.get_type() != sol::type::table)
+		throw sol::error("CreatePlant: fourth argument must be a table or nil");
+
+	auto table = value.as<sol::table>();
+	for (const auto& entry : table)
+	{
+		if (entry.first.get_type() != sol::type::string)
+			throw sol::error("CreatePlant: option keys must be strings");
+		auto key = entry.first.as<std::string>();
+		if (key != "Hp" && key != "MaxHp" && key != "Sleeping")
+			throw sol::error("CreatePlant: unknown option " + key);
+	}
+	for (const char* field : { "Hp", "MaxHp" })
+	{
+		sol::object health = table.raw_get<sol::object>(field);
+		if (health.get_type() == sol::type::lua_nil)
+			continue;
+		if (health.get_type() != sol::type::number)
+			throw sol::error(std::string("CreatePlant: ") + field + " must be a number");
+		double number = health.as<double>();
+		if (!std::isfinite(number)
+			|| number < (std::numeric_limits<int>::lowest)()
+			|| number > (std::numeric_limits<int>::max)())
+			throw sol::error(std::string("CreatePlant: ") + field + " is out of range");
+		if (std::trunc(number) != number)
+			throw sol::error(std::string("CreatePlant: ") + field + " must be an integer");
+		if (std::string(field) == "Hp") options.Hp = static_cast<int>(number);
+		else options.MaxHp = static_cast<int>(number);
+	}
+	sol::object sleeping = table.raw_get<sol::object>("Sleeping");
+	if (sleeping.get_type() != sol::type::lua_nil)
+	{
+		if (sleeping.get_type() != sol::type::boolean)
+			throw sol::error("CreatePlant: Sleeping must be a boolean");
+		options.Sleeping = sleeping.as<bool>();
+	}
+	return options;
+}
+
+static void ApplyPlantSpawnOptions(PVZ::Plant& plant, const PlantSpawnOptions& options)
+{
+	if (options.Sleeping.has_value()) plant.SetSleeping(*options.Sleeping);
+	if (options.Hp.has_value()) plant.Hp = *options.Hp;
+	if (options.MaxHp.has_value()) plant.MaxHp = *options.MaxHp;
+}
+
 export void LuaEnvInit();
 export void LuaCallOnMatchInit()
 {
@@ -193,8 +256,11 @@ void LuaEnvInit()
 		sol::lib::io
 	);
 
-	lua.set_function("CreatePlant", [](int type, int row, int column) {
-		return Creator::CreatePlant(static_cast<SeedType::SeedType>(type), row, column);
+	lua.set_function("CreatePlant", [](int type, int row, int column, sol::variadic_args args) {
+		auto options = ReadPlantSpawnOptions(args);
+		auto plant = Creator::CreatePlant(static_cast<SeedType::SeedType>(type), row, column);
+		ApplyPlantSpawnOptions(plant, options);
+		return plant;
 	});
 
 	lua.set_function("CreateZombie", [](int type, int row, int column, sol::variadic_args args) {

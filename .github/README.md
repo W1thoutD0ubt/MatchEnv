@@ -143,7 +143,7 @@ end
 
 | 函数 | 参数 | 说明 |
 |------|------|------|
-| `CreatePlant(type, row, column)` | 植物类型、行、列 | 在指定位置创建植物 |
+| `CreatePlant(type, row, column, options)` | 植物类型、行、列、可选配置 table | 在指定位置创建植物，可设置初始生命值和睡眠状态，详见 [植物配置](../example/CreatePlant.md) |
 | `CreateZombie(type, row, column, x)` | 僵尸类型、行、列、X坐标 | 在指定位置创建僵尸 |
 | `CreateIZBrain(row, column)` | 行、列（默认0） | 在指定位置创建 IZ 模式的脑子 |
 | `ClearPlants()` | 无 | 清除场上所有植物 |
